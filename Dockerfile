@@ -1,44 +1,56 @@
-#https://hub.docker.com/_/ubuntu/
+# Dockerfile pour compiler GnuCash et créer une AppImage
 FROM ubuntu:22.04
 
-# Éviter les prompts interactifs pendant l'installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install --yes apt-utils
+# Installer Python 3.13 depuis deadsnakes (runtime et dev)
+RUN apt-get update && \
+    apt-get install -y software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa -y && \
+    apt-get update && \
+    apt-get install -y python3.13 libpython3.13 python3.13-dev libpython3.13-dev
 
-#=== Installer les outils de locale :
+#définir Python 3.13 comme version par défaut
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.13 2
 
-RUN apt-get install --yes locales tzdata && rm -rf /var/lib/apt/lists/*
+# Installation des dépendances de compilation
+RUN apt-get update && apt-get install -y \
+    git wget sudo cmake make g++ pkg-config \
+    libglib2.0-dev \
+    libxml2-dev \
+    libxslt1-dev \
+    xsltproc \
+    libgtk-3-dev \
+    libwebkit2gtk-4.0-dev \
+    libboost-all-dev \
+    libicu-dev \
+    swig \
+    guile-3.0 \
+    guile-3.0-dev \
+    guile-3.0-libs \
+    libgc1 \
+    libgmp10 \
+    libunistring2 \
+    libffi8 \
+    libdbi-dev libdbd-sqlite3 \
+    libgwengui-gtk3-dev \
+    libaqbanking-dev libofx-dev \
+    gettext \
+    intltool \
+    googletest libgtest-dev libgmock-dev \
+    file \
+    patchelf \
+    desktop-file-utils \
+    zsync \
+    && rm -rf /var/lib/apt/lists/*
 
-# Générer et configurer les locales françaises
-RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
- && sed -i '/fr_FR.UTF-8/s/^# //g' /etc/locale.gen \
- && locale-gen
-
-# Définir les variables d'environnement pour les locales
-ENV LANG=fr_FR.UTF-8
-ENV LANGUAGE=fr_FR:fr
-ENV LC_ALL=fr_FR.UTF-8
-
-# Configurer le fuseau horaire (optionnel)
-ENV TZ=Europe/Paris
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-# Reconfigurer tzdata pour éviter les problèmes
-RUN dpkg-reconfigure -f noninteractive tzdata
-
-#=== Install required packages for building App :
-
-#Note:
-# appstream is used by AppImageTool
-RUN apt-get update \
-&& apt-get install --yes apt-utils \
-&& apt-get install --yes sudo wget locales build-essential cmake pkg-config appstream \
-&& useradd -m docker \
-&& echo "docker:docker" | chpasswd \
-&& adduser docker sudo
-
-#For convenience, allow fake user to use sudo without password.
-RUN echo "docker ALL = NOPASSWD:ALL" >/etc/sudoers.d/docker
-#Always log in with this fake user
+# Créer l'utilisateur docker (uid = 1000 logiquement) avec droits sudo sans mot de passe, et l'utiliser en connexion par défaut
+RUN useradd -m -s /bin/bash -G sudo docker \
+    && echo "docker ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 USER docker
+
+WORKDIR /workspace
+
+# Point d'entrée par défaut
+CMD ["/workspace/build-gnucash.sh"]

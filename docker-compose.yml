@@ -1,0 +1,15 @@
+services:
+  gnucash-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gnucash-appimage-builder
+    user: docker
+    volumes:
+      # Montage du répertoire courant (scripts, sources, builds)
+      - .:/workspace
+    working_dir: /workspace
+    environment:
+      - DEBIAN_FRONTEND=noninteractive
+      - DEBUG=${DEBUG:-0}  # Transmet la variable DEBUG (0 par défaut)
+      - GNUCASH_VERSION=${GNUCASH_VERSION}  # injecté normalement depuis .env

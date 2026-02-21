@@ -1,0 +1,216 @@
+name: Build and Release GnuCash AppImage (Advanced)
+
+on:
+  push:
+    tags:
+      - '*'  # Déclenchement sur les tags de version
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: 'Enable debug mode'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120  # 2 heures max pour éviter les builds qui bloquent
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          # GitHub runners ont ~14GB libre, on nettoie pour être sûr
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          df -h
+
+      - name: Generate .env from tag
+        run: |
+          # Extraire la version depuis le tag (v5.14.0 → 5.14.0)
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"   # retire le préfixe 'v' du tag
+          
+          echo "GNUCASH_VERSION=${VERSION}" > .env
+          echo "GNUCASH_VERSION=${VERSION}" >> $GITHUB_ENV
+          
+          echo "Version extraite du tag: ${VERSION}"
+
+      - name: Display version
+        run: echo "Building GnuCash ${{ env.GNUCASH_VERSION }}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('Dockerfile') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/gnucash-*.tar.bz2
+            build/linuxdeploy-x86_64.AppImage
+            build/appimagetool-x86_64.AppImage
+          key: gnucash-tools-${{ env.GNUCASH_VERSION }}-v2
+          restore-keys: |
+            gnucash-tools-${{ env.GNUCASH_VERSION }}-
+            gnucash-tools-
+
+      - name: Create directories
+        run: |
+          mkdir -p build output
+          chmod +x build.sh build-gnucash.sh
+
+      - name: Build Docker image
+        run: |
+          docker compose build \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --cache-from type=local,src=/tmp/.buildx-cache \
+            --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Build AppImage
+        env:
+          DEBUG: ${{ inputs.debug && '1' || '0' }}
+        run: |
+          echo "Starting build with DEBUG=$DEBUG"
+          ./build.sh build 2>&1 | tee build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.sha }}
+          path: build.log
+          retention-days: 7
+
+      - name: Verify AppImage
+        run: |
+          APPIMAGE=$(ls output/GnuCash-*.AppImage | head -n 1)
+          if [ ! -f "$APPIMAGE" ]; then
+            echo "Error: AppImage not found!"
+            exit 1
+          fi
+          
+          echo "AppImage found: $APPIMAGE"
+          chmod +x "$APPIMAGE"
+          
+          # Test basic execution
+          file "$APPIMAGE"
+          ls -lh "$APPIMAGE"
+
+      - name: Extract AppImage info
+        id: appimage_info
+        run: |
+          APPIMAGE=$(ls output/GnuCash-*.AppImage | head -n 1)
+          FILENAME=$(basename "$APPIMAGE")
+          SIZE=$(ls -lh "$APPIMAGE" | awk '{print $5}')
+          
+          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+          echo "filepath=$APPIMAGE" >> $GITHUB_OUTPUT
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+          
+          echo "### AppImage Build Info" >> $GITHUB_STEP_SUMMARY
+          echo "- **Filename:** $FILENAME" >> $GITHUB_STEP_SUMMARY
+          echo "- **Size:** $SIZE" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Generate checksums
+        run: |
+          cd output
+          sha256sum *.AppImage > SHA256SUMS.txt
+          md5sum *.AppImage > MD5SUMS.txt
+          
+          echo "### Checksums" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat SHA256SUMS.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GnuCash-AppImage-${{ github.ref_name }}-${{ github.sha }}
+          path: |
+            output/*.AppImage
+            output/SHA256SUMS.txt
+            output/MD5SUMS.txt
+          retention-days: 90
+          compression-level: 0  # AppImage est déjà compressé
+
+      - name: Move Docker cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: GnuCash-AppImage-*
+          merge-multiple: true
+          path: release-files
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release-files/*.AppImage
+            release-files/SHA256SUMS.txt
+            release-files/MD5SUMS.txt
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          generate_release_notes: true
+          body: |
+            ## GnuCash AppImage Release
+            
+            **Version:** ${{ github.ref_name }}
+            **Build Date:** ${{ github.event.head_commit.timestamp }}
+            
+            ### Installation
+            
+            ```bash
+            # Télécharger l'AppImage
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/GnuCash-${{ env.GNUCASH_VERSION }}-x86_64.AppImage
+            
+            # Rendre exécutable
+            chmod +x GnuCash-${{ env.GNUCASH_VERSION }}-x86_64.AppImage
+            
+            # Lancer
+            ./GnuCash-${{ env.GNUCASH_VERSION }}-x86_64.AppImage
+            ```
+            
+            ### Vérification de l'intégrité
+            
+            Comparez le checksum SHA256 avec celui dans `SHA256SUMS.txt`:
+            
+            ```bash
+            sha256sum GnuCash-${{ env.GNUCASH_VERSION }}-x86_64.AppImage
+            ```
+            
+            ### Système requis
+            
+            - Linux x86_64
+            - glibc 2.35 ou supérieur (Ubuntu 22.04+, Fedora 36+, Debian 12+)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

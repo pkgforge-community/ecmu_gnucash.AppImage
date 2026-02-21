@@ -1,0 +1,93 @@
+name: Build GnuCash AppImage
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:  # Permet de lancer manuellement le workflow
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Load version from .env
+        run: |
+          source .env
+          echo "GNUCASH_VERSION=${GNUCASH_VERSION}" >> $GITHUB_ENV
+
+      - name: Display version
+        run: echo "Building GnuCash ${{ env.GNUCASH_VERSION }}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create output directory
+        run: mkdir -p output
+
+      - name: Cache build directory
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/gnucash-*.tar.bz2
+            build/linuxdeploy-x86_64.AppImage
+            build/appimagetool-x86_64.AppImage
+          key: gnucash-build-cache-${{ env.GNUCASH_VERSION }}-${{ hashFiles('build-gnucash.sh', 'Dockerfile') }}
+          restore-keys: |
+            gnucash-build-cache-${{ env.GNUCASH_VERSION }}-
+            gnucash-build-cache-
+
+      - name: Build AppImage
+        run: |
+          chmod +x build.sh
+          ./build.sh build
+
+      - name: List output files
+        run: ls -lh output/
+
+      - name: Get AppImage filename
+        id: appimage
+        run: |
+          APPIMAGE_FILE=$(ls output/GnuCash-*.AppImage | head -n 1)
+          echo "filename=$(basename $APPIMAGE_FILE)" >> $GITHUB_OUTPUT
+          echo "filepath=$APPIMAGE_FILE" >> $GITHUB_OUTPUT
+
+      - name: Upload AppImage as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gnucash-appimage-${{ github.sha }}
+          path: ${{ steps.appimage.outputs.filepath }}
+          retention-days: 30
+
+      - name: Upload to release (on release only)
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ${{ steps.appimage.outputs.filepath }}
+          asset_name: ${{ steps.appimage.outputs.filename }}
+          asset_content_type: application/octet-stream
+
+      - name: Generate checksum
+        run: |
+          cd output
+          sha256sum *.AppImage > checksums.txt
+          cat checksums.txt
+
+      - name: Upload checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums-${{ github.sha }}
+          path: output/checksums.txt
+          retention-days: 30

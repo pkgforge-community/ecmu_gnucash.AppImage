@@ -1,5 +1,29 @@
-env
-appdir/*
-*.AppImage
-gnucash*
-python*
+# Répertoires de cache et build
+build/
+# AppImages générées
+output/
+
+# Fichiers temporaires
+*.tmp
+*.log
+
+# Fichiers IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# GitHub Actions (optionnel - pour tester localement)
+.github/workflows/*.log
+
+# Docker
+.docker/
+
+# Fichiers de diagnostic extraits
+/tmp/gnucash-appimage-extract-*
+squashfs-root/

@@ -1,0 +1,111 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Check shell scripts syntax
+        run: |
+          echo "Validation de la syntaxe des scripts shell..."
+          for script in *.sh; do
+            if [ -f "$script" ]; then
+              echo "Checking $script..."
+              bash -n "$script" || exit 1
+            fi
+          done
+
+      - name: Check workflow files syntax
+        run: |
+          echo "Validation des fichiers workflow..."
+          for workflow in .github/workflows/*.yml; do
+            if [ -f "$workflow" ]; then
+              echo "Checking $workflow..."
+              # Validation basique YAML
+              python3 -c "import yaml; yaml.safe_load(open('$workflow'))" || exit 1
+            fi
+          done
+
+      - name: Validate Dockerfile
+        run: |
+          echo "Validation du Dockerfile..."
+          if [ -f "Dockerfile" ]; then
+            docker run --rm -i hadolint/hadolint < Dockerfile || true
+          fi
+
+      - name: Check for secrets in code
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+
+      - name: Test build script help
+        run: |
+          chmod +x build.sh
+          ./build.sh help
+
+  test-build:
+    runs-on: ubuntu-latest
+    needs: validate
+    # Seulement pour les PRs qui modifient des fichiers critiques
+    if: |
+      contains(github.event.pull_request.changed_files, 'Dockerfile') ||
+      contains(github.event.pull_request.changed_files, 'build-gnucash.sh') ||
+      contains(github.event.pull_request.changed_files, 'docker-compose.yml')
+    
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Test Docker build only
+        run: |
+          docker compose build
+          echo "✅ Docker image builds successfully"
+
+  comment-success:
+    runs-on: ubuntu-latest
+    needs: [validate, test-build]
+    if: always() && needs.validate.result == 'success'
+    permissions:
+      pull-requests: write
+    
+    steps:
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const validation = '${{ needs.validate.result }}';
+            const testBuild = '${{ needs.test-build.result }}';
+            
+            let message = '## ✅ Validation PR réussie\n\n';
+            message += '- Syntaxe des scripts: ✅\n';
+            message += '- Workflows YAML: ✅\n';
+            message += '- Sécurité: ✅\n';
+            
+            if (testBuild === 'success') {
+              message += '- Build Docker: ✅\n';
+            } else if (testBuild === 'skipped') {
+              message += '- Build Docker: ⏭️ (non nécessaire)\n';
+            }
+            
+            message += '\n**La PR peut être mergée** 🎉';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
