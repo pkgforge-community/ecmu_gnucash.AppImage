@@ -33,7 +33,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.upstream.outputs.version }}"
-          TAG="v${VERSION}"
+          TAG="${VERSION}"
           
           # Vérifie si une release avec ce tag existe déjà
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
@@ -73,6 +73,8 @@ jobs:
           TAG="${{ steps.check.outputs.tag }}"
           VERSION="${{ steps.upstream.outputs.version }}"
           
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "GnuCash AppImage $VERSION"
           git push origin "$TAG"
           
