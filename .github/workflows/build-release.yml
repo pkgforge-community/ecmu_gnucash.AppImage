@@ -11,6 +11,17 @@ on:
         required: false
         type: boolean
         default: false
+  workflow_call:          # déclencheur pour l'appel depuis check-new-version
+    inputs:
+      version:
+        description: 'Version de GnuCash à compiler (ex: 5.15)'
+        required: true
+        type: string
+      debug:
+        description: 'Enable debug mode'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -30,19 +41,19 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           df -h
 
-      - name: Generate .env from tag
+      - name: Generate .env from version
         run: |
-          # Extraire la version depuis le tag (v5.14.0 → 5.14.0)
-          VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"   # retire le préfixe 'v' du tag
+          # Selon le déclencheur : tag, workflow_dispatch ou workflow_call
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          fi
           
           echo "GNUCASH_VERSION=${VERSION}" > .env
           echo "GNUCASH_VERSION=${VERSION}" >> $GITHUB_ENV
-          
-          echo "Version extraite du tag: ${VERSION}"
-
-      - name: Display version
-        run: echo "Building GnuCash ${{ env.GNUCASH_VERSION }}"
+          echo "Version: ${VERSION} => Building GnuCash ${{ env.GNUCASH_VERSION }}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -158,7 +169,7 @@ jobs:
 
   release:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
