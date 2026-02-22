@@ -11,7 +11,7 @@ on:
         required: false
         type: boolean
         default: false
-  workflow_call:          # déclencheur pour l'appel depuis check-new-version
+  workflow_call:          # déclencheur pour l'appel depuis une autre action
     inputs:
       version:
         description: 'Version de GnuCash à compiler (ex: 5.15)'
@@ -26,7 +26,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # 2 heures max pour éviter les builds qui bloquent
+    timeout-minutes: 90  # 90 minutes max pour éviter les builds qui bloquent
     
     steps:
       - name: Checkout repository
@@ -53,7 +53,8 @@ jobs:
           
           echo "GNUCASH_VERSION=${VERSION}" > .env
           echo "GNUCASH_VERSION=${VERSION}" >> $GITHUB_ENV
-          echo "Version: ${VERSION} => Building GnuCash ${{ env.GNUCASH_VERSION }}"
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "Ready to build GnuCash ${{ env.VERSION }}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -186,33 +187,52 @@ jobs:
           merge-multiple: true
           path: release-files
 
+      - name: Set tag and release version
+        run: |
+          VERSION="${{ inputs.version || github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "TAG=${{ inputs.version || github.ref_name }}" >> $GITHUB_ENV
+
+      - name: Create and push tag (workflow_call)
+        if: github.event_name == 'workflow_call'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag -a "${{ env.TAG }}" \
+            -m "GnuCash AppImage ${{ env.TAG }}"
+          git push origin "${{ env.TAG }}"
+
       - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ env.TAG }}
           files: |
             release-files/*.AppImage
             release-files/SHA256SUMS.txt
             release-files/MD5SUMS.txt
           draft: false
-          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          prerelease: ${{ contains(env.TAG, 'alpha') || contains(env.TAG, 'beta') || contains(env.TAG, 'rc') }}
           generate_release_notes: true
           body: |
             ## GnuCash AppImage Release
             
-            **Version:** ${{ github.ref_name }}
+            **Version:** ${{ env.VERSION }}
             **Build Date:** ${{ github.event.head_commit.timestamp }}
             
             ### Installation
             
             ```bash
             # Télécharger l'AppImage
-            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/GnuCash-${{ env.GNUCASH_VERSION }}-x86_64.AppImage
+            wget https://github.com/${{ github.repository }}/releases/download/${{ env.TAG }}/GnuCash-${{ env.VERSION }}-x86_64.AppImage
             
             # Rendre exécutable
-            chmod +x GnuCash-${{ env.GNUCASH_VERSION }}-x86_64.AppImage
+            chmod +x GnuCash-${{ env.VERSION }}-x86_64.AppImage
             
             # Lancer
-            ./GnuCash-${{ env.GNUCASH_VERSION }}-x86_64.AppImage
+            ./GnuCash-${{ env.VERSION }}-x86_64.AppImage
             ```
             
             ### Vérification de l'intégrité
@@ -220,12 +240,10 @@ jobs:
             Comparez le checksum SHA256 avec celui dans `SHA256SUMS.txt`:
             
             ```bash
-            sha256sum GnuCash-${{ env.GNUCASH_VERSION }}-x86_64.AppImage
+            sha256sum GnuCash-${{ env.VERSION }}-x86_64.AppImage
             ```
             
             ### Système requis
             
             - Linux x86_64
             - glibc 2.35 ou supérieur (Ubuntu 22.04+, Fedora 36+, Debian 12+)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
