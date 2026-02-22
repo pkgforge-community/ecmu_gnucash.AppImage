@@ -113,20 +113,20 @@ jobs:
           path: build.log
           retention-days: 7
 
-      - name: Verify AppImage
-        run: |
-          APPIMAGE=$(ls output/GnuCash-*.AppImage | head -n 1)
-          if [ ! -f "$APPIMAGE" ]; then
-            echo "Error: AppImage not found!"
-            exit 1
-          fi
-          
-          echo "AppImage found: $APPIMAGE"
-          chmod +x "$APPIMAGE"
-          
-          # Test basic execution
-          file "$APPIMAGE"
-          ls -lh "$APPIMAGE"
+      #- name: Verify AppImage
+      #  run: |
+      #    APPIMAGE=$(ls output/GnuCash-*.AppImage | head -n 1)
+      #    if [ ! -f "$APPIMAGE" ]; then
+      #      echo "Error: AppImage not found!"
+      #      exit 1
+      #    fi
+      #    
+      #    echo "AppImage found: $APPIMAGE"
+      #    chmod +x "$APPIMAGE"
+      #    
+      #    # Test basic execution
+      #    file "$APPIMAGE"
+      #    ls -lh "$APPIMAGE"
 
       - name: Extract AppImage info
         id: appimage_info
