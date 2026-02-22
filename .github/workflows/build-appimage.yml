@@ -31,8 +31,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Create output directory
-        run: mkdir -p output
+      - name: Create directories
+        run: |
+          mkdir -p build output
+          chmod 777 build output
+          chmod +x build.sh build-gnucash.sh
 
       - name: Cache build directory
         uses: actions/cache@v4
@@ -47,9 +50,11 @@ jobs:
             gnucash-build-cache-
 
       - name: Build AppImage
+        env:
+          DEBUG: ${{ inputs.debug && '1' || '0' }}
         run: |
-          chmod +x build.sh
-          ./build.sh build
+          echo "Starting build with DEBUG=$DEBUG"
+          ./build.sh build 2>&1 | tee build.log
 
       - name: List output files
         run: ls -lh output/

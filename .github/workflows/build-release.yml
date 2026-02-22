@@ -85,6 +85,7 @@ jobs:
       - name: Create directories
         run: |
           mkdir -p build output
+          chmod 777 build output
           chmod +x build.sh build-gnucash.sh
 
       - name: Build Docker image

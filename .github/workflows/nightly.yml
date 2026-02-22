@@ -25,6 +25,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Create directories
+        run: |
+          mkdir -p build output
+          chmod 777 build output
+          chmod +x build.sh build-gnucash.sh
+
       - name: Cache build artifacts
         uses: actions/cache@v4
         with:
@@ -38,10 +44,11 @@ jobs:
             gnucash-tools-${{ env.GNUCASH_VERSION }}-
 
       - name: Build AppImage
+        env:
+          DEBUG: ${{ inputs.debug && '1' || '0' }}
         run: |
-          mkdir -p output
-          chmod +x build.sh
-          ./build.sh build
+          echo "Starting build with DEBUG=$DEBUG"
+          ./build.sh build 2>&1 | tee build.log
 
       - name: Get build date
         id: date
