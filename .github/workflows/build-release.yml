@@ -199,8 +199,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git tag -a "${{ env.TAG }}" \
-            -m "GnuCash AppImage ${{ env.TAG }}"
+          git tag -a "${{ env.TAG }}" -m "GnuCash AppImage ${{ env.TAG }}"
           git push origin "${{ env.TAG }}"
 
       - name: Create Release
@@ -208,7 +207,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ env.TAG }}
+          tag_name: GnuCash AppImage ${{ env.TAG }}
           files: |
             release-files/*.AppImage
             release-files/SHA256SUMS.txt
@@ -217,12 +216,7 @@ jobs:
           prerelease: ${{ contains(env.TAG, 'alpha') || contains(env.TAG, 'beta') || contains(env.TAG, 'rc') }}
           generate_release_notes: true
           body: |
-            ## GnuCash AppImage Release
-            
-            **Version:** ${{ env.VERSION }}
-            **Build Date:** ${{ github.event.head_commit.timestamp }}
-            
-            ### Installation
+            ## Installation
             
             ```bash
             # Télécharger l'AppImage
@@ -235,7 +229,7 @@ jobs:
             ./GnuCash-${{ env.VERSION }}-x86_64.AppImage
             ```
             
-            ### Vérification de l'intégrité
+            ## Vérification de l'intégrité
             
             Comparez le checksum SHA256 avec celui dans `SHA256SUMS.txt`:
             
@@ -243,7 +237,7 @@ jobs:
             sha256sum GnuCash-${{ env.VERSION }}-x86_64.AppImage
             ```
             
-            ### Système requis
+            ## Système requis
             
             - Linux x86_64
             - glibc 2.35 ou supérieur (Ubuntu 22.04+, Fedora 36+, Debian 12+)
