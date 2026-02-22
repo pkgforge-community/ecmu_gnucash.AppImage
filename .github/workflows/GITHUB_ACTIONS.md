@@ -96,12 +96,11 @@ Flux complet :
 Tous les lundis à 6h UTC : check-new-version.yml
 ├── API GitHub → dernier tag Gnucash (ex: 5.15)
 └── API GitHub → release 5.15 existe dans votre repo ?
-    ├── OUI → stop, rien à faire
-    └── NON →
-        ├── # met à jour .env (GNUCASH_VERSION=5.15)
-        ├── # commit + push sur main
-        └── crée et pousse le tag 5.15
-            └── déclenche automatiquement build-release.yml = compile + crée la release GitHub
+    ├── OUI
+    |   └── stop, rien à faire
+    └── NON
+        └── Définit la version à 5.15 et le drapeau pour déclencher le job trigger-build
+        └── trigger-build appelle l'action build-release.yml par workflow_call avec la version 5.15
 ```
 
 ### 4. Validation des Pull Requests (`pr-validation.yml`)

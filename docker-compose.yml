@@ -3,11 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: gnucash-appimage-builder   #Nom explicite de l'image pour l'étape "Build Docker image" des actions github "build-..."
     container_name: gnucash-appimage-builder
     user: docker
     volumes:
-      # Montage du répertoire courant (scripts, sources, builds)
-      - .:/workspace
+      - .:/workspace                  # Montage du répertoire courant (scripts, sources, builds)
     working_dir: /workspace
     environment:
       - DEBIAN_FRONTEND=noninteractive
