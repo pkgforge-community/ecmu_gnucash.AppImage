@@ -207,7 +207,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: GnuCash AppImage ${{ env.TAG }}
+          tag_name: ${{ env.TAG }}
+          name: GnuCash AppImage ${{ env.TAG }}
           files: |
             release-files/*.AppImage
             release-files/SHA256SUMS.txt
