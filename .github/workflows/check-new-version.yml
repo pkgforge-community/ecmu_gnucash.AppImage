@@ -2,7 +2,7 @@ name: Check GnuCash New Version
 
 on:
   schedule:
-    - cron: '0 6 * * 1'  # Tous les lundis à 6h00 UTC
+    - cron: '0 14 * * 1'  # Tous les lundis à 14h00 UTC
   workflow_dispatch:       # Lancement manuel possible
 
 jobs:
