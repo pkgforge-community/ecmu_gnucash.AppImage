@@ -7,7 +7,7 @@ fi
 set -e
 
 # Charge la version depuis .env si non déjà définie
-if [ -z "$GNUCASH_VERSION" ] && [ -f "$(dirname "$0")/.env" ]; then
+if [ -z "${GNUCASH_VERSION}" ] && [ -f "$(dirname "$0")/.env" ]; then
     source "$(dirname "$0")/.env"
 fi
 # Quitte le script s'il manque cette variable à ce stade
@@ -26,24 +26,24 @@ mkdir --parent build/AppDir
 
 #region Téléchargement de GnuCash
 
-echo "=== Téléchargement de GnuCash $GNUCASH_VERSION ==="
+echo "=== Téléchargement de GnuCash ${GNUCASH_VERSION} ==="
 
 # Créer le répertoire de build s'il n'existe pas
 mkdir -p build
 pushd build
 
 # Télécharger seulement si l'archive n'existe pas
-if [ ! -f "gnucash-$GNUCASH_VERSION.tar.bz2" ]; then
+if [ ! -f "gnucash-${GNUCASH_VERSION}.tar.bz2" ]; then
     echo "Téléchargement de l'archive..."
-    wget https://github.com/Gnucash/gnucash/releases/download/$GNUCASH_VERSION/gnucash-$GNUCASH_VERSION.tar.bz2
+    wget https://github.com/Gnucash/gnucash/releases/download/${GNUCASH_VERSION}/gnucash-${GNUCASH_VERSION}.tar.bz2
 else
     echo "Archive déjà présente, téléchargement ignoré."
 fi
 
 # Extraire seulement si le répertoire n'existe pas
-if [ ! -d "gnucash-$GNUCASH_VERSION" ]; then
+if [ ! -d "gnucash-${GNUCASH_VERSION}" ]; then
     echo "Extraction de l'archive..."
-    tar -xjf gnucash-$GNUCASH_VERSION.tar.bz2
+    tar -xjf gnucash-${GNUCASH_VERSION}.tar.bz2
 else
     echo "Sources déjà extraites."
 fi
@@ -55,7 +55,7 @@ popd
 
 echo "=== Configuration avec CMake ==="
 # Vérifier si le build existe déjà (maintenant à côté des sources)
-BUILD_DIR="$SCRIPTPATH/build/gnucash-$GNUCASH_VERSION_build"
+BUILD_DIR="$SCRIPTPATH/build/gnucash-${GNUCASH_VERSION}_build"
 
 if [ ! -d "$BUILD_DIR" ]; then
     echo "Premier build - création du répertoire et configuration CMake..."
@@ -70,7 +70,7 @@ if [ ! -d "$BUILD_DIR" ]; then
     # -DCMAKE_INSTALL_SYSCONFDIR=etc : Avec prefix=/usr/local, produit /usr/local/etc (OK pour BINRELOC)
     # NOTE: On n'utilise pas GNC_UNINSTALLED car on veut une installation complète dans AppDir
     #   GNC_UNINSTALLED est uniquement pour exécuter GnuCash depuis le répertoire de build sans installer
-    cmake "$SCRIPTPATH/build/gnucash-$GNUCASH_VERSION" \
+    cmake "$SCRIPTPATH/build/gnucash-${GNUCASH_VERSION}" \
         -DCMAKE_INSTALL_PREFIX=/usr/local \
         -DCMAKE_BUILD_TYPE=Release \
         -DWITH_PYTHON=ON \
@@ -217,7 +217,7 @@ echo "✅ Collecte des dépendances terminée"
 popd
 
 #endregion
-#region AppDir : Copie les pilotes DBI/DBD (SQLite, etc.)
+#region AppDir : Copie les pilotes DBI/DBD (SQLite, etc.) + OFX
 
 echo ""
 echo "=== Copie des pilotes DBI/DBD ==="
@@ -284,6 +284,10 @@ popd
 
 echo ""
 echo "✅ Configuration DBD terminée"
+
+echo ""
+echo "=== Copie de libofx7 ==="
+cp --recursive /usr/share/libofx7 build/AppDir/usr/local/share/
 
 #endregion
 #region AppDir : copie manuellement Guile
@@ -584,6 +588,8 @@ export LD_LIBRARY_PATH="${HERE}/usr/local/lib:${HERE}/usr/local/lib/x86_64-linux
 export XDG_DATA_DIRS="${HERE}/usr/local/share:${XDG_DATA_DIRS}"
 export GSETTINGS_SCHEMA_DIR="${HERE}/usr/local/share/glib-2.0/schemas:${GSETTINGS_SCHEMA_DIR}"
 
+export OFX_DTD_PATH="${HERE}/usr/local/share/libofx7/libofx/dtd"
+
 # Variables spécifiques à GnuCash
 export GNC_MODULE_PATH="${HERE}/usr/local/lib/gnucash"
 export GNC_DBD_DIR="${HERE}/usr/local/lib/x86_64-linux-gnu/dbd"
@@ -602,11 +608,11 @@ chmod +x AppDir/AppRun
 echo ""
 echo "=== Création de l'AppImage ==="
 mkdir -p "$SCRIPTPATH/output"
-ARCH=x86_64 appimagetool --no-appstream AppDir "$SCRIPTPATH/output/GnuCash-$GNUCASH_VERSION-x86_64.AppImage"
+ARCH=x86_64 appimagetool --no-appstream AppDir "$SCRIPTPATH/output/GnuCash-${GNUCASH_VERSION}-x86_64.AppImage"
 
 echo ""
 echo "=== AppImage créée avec succès ==="
-ls -lh "$SCRIPTPATH/output/GnuCash-$GNUCASH_VERSION-x86_64.AppImage"
+ls -lh "$SCRIPTPATH/output/GnuCash-${GNUCASH_VERSION}-x86_64.AppImage"
 
 popd
 
